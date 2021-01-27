@@ -6,6 +6,8 @@ const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
 
 const feedRoutes = require("./routes/feed");
+const authRoutes = require("./routes/auth");
+
 const app = express();
 
 const fileStorage = multer.diskStorage({
@@ -46,18 +48,23 @@ app.use((req, res, next) => {
   next();
 });
 
+
+app.use("/auth", authRoutes);
 app.use("/feed", feedRoutes);
+
 
 app.use((error, req, res, next) => {
   console.log(error);
   const status = error.statusCode || 500;
   const message = error.message;
-  res.status(status).json({ message: message });
+  const data = error.data;
+  res.status(status).json({ message: message, data: data });
 });
 
 mongoose
   .connect(
-    "mongodb+srv://dev:dev@reactmessageapp.grlcc.mongodb.net/reactMessageApp?retryWrites=true&w=majority"
+    "mongodb+srv://dev:dev@reactmessageapp.grlcc.mongodb.net/reactMessageApp?retryWrites=true&w=majority",
+    (option = { useNewUrlParser: true, useUnifiedTopology: true })
   )
   .then((result) => {
     app.listen(8080);

@@ -1,15 +1,32 @@
-const validator = require("express-validator");
-const fs = require("fs");
-const path = require("path");
+const fs = require('fs');
+const path = require('path');
 
-const Post = require("../models/post");
+const { validationResult } = require('express-validator/check');
+
+const Post = require('../models/post');
 
 exports.getPosts = (req, res, next) => {
+  const currentPage = req.query.page || 1;
+  const perPage = 2;
+  let totalItems;
   Post.find()
-    .then((posts) => {
-      res.status(200).json({ message: "Fetched Success", posts: posts });
+    .countDocuments()
+    .then(count => {
+      totalItems = count;
+      return Post.find()
+        .skip((currentPage - 1) * perPage)
+        .limit(perPage);
     })
-    .catch((err) => {
+    .then(posts => {
+      res
+        .status(200)
+        .json({
+          message: 'Fetched posts successfully.',
+          posts: posts,
+          totalItems: totalItems
+        });
+    })
+    .catch(err => {
       if (!err.statusCode) {
         err.statusCode = 500;
       }
@@ -18,39 +35,35 @@ exports.getPosts = (req, res, next) => {
 };
 
 exports.createPost = (req, res, next) => {
-  const errors = validator.validationResult(req);
+  const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    const error = new Error("Validation failed");
+    const error = new Error('Validation failed, entered data is incorrect.');
     error.statusCode = 422;
     throw error;
   }
   // if (!req.file) {
-  //   const error = new Error("No Image");
+  //   const error = new Error('No image provided.');
   //   error.statusCode = 422;
   //   throw error;
   // }
   // const imageUrl = req.file.path;
-  const imageUrl = "images/main.png";
   const title = req.body.title;
   const content = req.body.content;
   const post = new Post({
     title: title,
     content: content,
-    imageUrl: imageUrl,
-    creator: {
-      name: "Choy Shao Wei",
-    },
+    imageUrl: "images/main.png",
+    creator: { name: 'Maximilian' }
   });
   post
     .save()
-    .then((result) => {
-      console.log(result);
+    .then(result => {
       res.status(201).json({
-        message: "Post created successfully!",
-        post: result,
+        message: 'Post created successfully!',
+        post: result
       });
     })
-    .catch((err) => {
+    .catch(err => {
       if (!err.statusCode) {
         err.statusCode = 500;
       }
@@ -61,15 +74,15 @@ exports.createPost = (req, res, next) => {
 exports.getPost = (req, res, next) => {
   const postId = req.params.postId;
   Post.findById(postId)
-    .then((post) => {
+    .then(post => {
       if (!post) {
-        const error = new Error("Could not find post.");
+        const error = new Error('Could not find post.');
         error.statusCode = 404;
         throw error;
       }
-      res.status(200).json({ message: "Post fetched", post: post });
+      res.status(200).json({ message: 'Post fetched.', post: post });
     })
-    .catch((err) => {
+    .catch(err => {
       if (!err.statusCode) {
         err.statusCode = 500;
       }
@@ -78,33 +91,32 @@ exports.getPost = (req, res, next) => {
 };
 
 exports.updatePost = (req, res, next) => {
-  const { postId } = req.params;
-  const { title, content, imageUrl } = req.body;
-  console.log(req.body);
-  console.log(imageUrl);
-  const errors = validator.validationResult(req);
+  const postId = req.params.postId;
+  const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    const error = new Error("Validation failed");
+    const error = new Error('Validation failed, entered data is incorrect.');
     error.statusCode = 422;
     throw error;
   }
+  const title = req.body.title;
+  const content = req.body.content;
+  let imageUrl = req.body.image;
   if (req.file) {
-    imageUrl = req.file.image;
+    imageUrl = req.file.path;
   }
-  console.log(imageUrl);
   if (!imageUrl) {
-    const error = new Error("No File Picked");
+    const error = new Error('No file picked.');
     error.statusCode = 422;
     throw error;
   }
   Post.findById(postId)
-    .then((post) => {
+    .then(post => {
       if (!post) {
-        const error = new Error("Could not find post.");
+        const error = new Error('Could not find post.');
         error.statusCode = 404;
         throw error;
       }
-      if (imageUrl != post.imageUrl) {
+      if (imageUrl !== post.imageUrl) {
         clearImage(post.imageUrl);
       }
       post.title = title;
@@ -112,10 +124,10 @@ exports.updatePost = (req, res, next) => {
       post.content = content;
       return post.save();
     })
-    .then((result) => {
-      res.status(200).json({ message: "Post updated", post: result });
+    .then(result => {
+      res.status(200).json({ message: 'Post updated!', post: result });
     })
-    .catch((err) => {
+    .catch(err => {
       if (!err.statusCode) {
         err.statusCode = 500;
       }
@@ -126,21 +138,21 @@ exports.updatePost = (req, res, next) => {
 exports.deletePost = (req, res, next) => {
   const postId = req.params.postId;
   Post.findById(postId)
-    .then((post) => {
+    .then(post => {
       if (!post) {
-        const error = new Error("Could not find post.");
+        const error = new Error('Could not find post.');
         error.statusCode = 404;
         throw error;
       }
-      // Check Users
+      // Check logged in user
       clearImage(post.imageUrl);
       return Post.findByIdAndRemove(postId);
     })
-    .then((result) => {
+    .then(result => {
       console.log(result);
-      res.status(200).json({message: "Deleted Post"})
+      res.status(200).json({ message: 'Deleted post.' });
     })
-    .catch((err) => {
+    .catch(err => {
       if (!err.statusCode) {
         err.statusCode = 500;
       }
@@ -148,7 +160,7 @@ exports.deletePost = (req, res, next) => {
     });
 };
 
-const clearImage = (filePath) => {
-  filePath = path.join(__dirname, "...", filePath);
-  fs.unlink(filePath, (err) => console.log(err));
+const clearImage = filePath => {
+  filePath = path.join(__dirname, '..', filePath);
+  fs.unlink(filePath, err => console.log(err));
 };
